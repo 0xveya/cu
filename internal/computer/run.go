@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"cu/internal/session"
 )
 
 var (
@@ -21,13 +23,22 @@ func Run(ctx context.Context, display string, argv []string) (int, error) {
 	if err := checkDisplay(display); err != nil {
 		return 0, err
 	}
+	return run(ctx, append(os.Environ(), "WAYLAND_DISPLAY="+display), argv)
+}
+
+// RunSession runs argv on a managed desktop and returns its exit code.
+func RunSession(ctx context.Context, info session.Info, argv []string) (int, error) {
+	return run(ctx, session.Environment(info.Runtime, info.Display), argv)
+}
+
+func run(ctx context.Context, environment, argv []string) (int, error) {
 	if len(argv) == 0 || argv[0] == "" {
 		return 0, ErrCommand
 	}
 
 	// #nosec G204 -- the command is explicitly supplied by the cu run caller.
 	command := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	command.Env = append(os.Environ(), "WAYLAND_DISPLAY="+display)
+	command.Env = environment
 	command.Stdin = os.Stdin
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr
