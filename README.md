@@ -14,13 +14,11 @@ Building requires the `wayland-client` development package and `pkg-config`.
 
 ## Try it
 
-```sh
-mise run demo
-```
-
-The demo starts a desktop, opens Foot, types `echo hello-from-cu`, saves a
-screenshot to `/tmp/cu-demo.png`, and stops the desktop. Set `CU_DEMO_OUT` to
-choose another screenshot path.
+Build with `mise run build`, then give your agent the
+[horse demo prompt](examples/horse/PROMPT.md). It asks the agent to use `cu`
+to arrange browser windows and draw a horse in Calc, inspecting the desktop
+after each significant action. The task needs Chromium and LibreOffice Calc
+as well as the runtime dependencies above.
 
 ## Commands
 
@@ -56,6 +54,8 @@ app IDs and titles, so an agent can check which apps are open before requesting
 a screenshot. Input commands return no output on success.
 Recording captures only the named Labwc desktop, including its apps, and
 returns the MP4 path as JSON. It keeps recording while other `cu` commands run.
+Recording playback defaults to 4× real time. Use `--speed 1` for real time;
+videos faster than real time show their speed in the top-right corner.
 Visible sessions record at their current desktop size; headless recordings
 default to 1920×1080. `record status` reports the output dimensions.
 For a browser that fills the recording, focus it and use `cu key --id agent-1
