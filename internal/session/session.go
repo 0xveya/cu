@@ -219,6 +219,11 @@ func Unit(id string) string {
 	return "cu_" + hex.EncodeToString([]byte(id)) + "_labwc.service"
 }
 
+// RecordUnit is the transient service that records one session.
+func RecordUnit(id string) string {
+	return "cu_" + hex.EncodeToString([]byte(id)) + "_record.service"
+}
+
 // Slice groups the compositor and launched applications for one session.
 func Slice(id string) string {
 	return "cu_" + hex.EncodeToString([]byte(id)) + ".slice"

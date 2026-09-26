@@ -1,5 +1,5 @@
-// Package windowlist reads public toplevel metadata from a Wayland compositor.
-package windowlist
+// Package waylandstate reads public output and toplevel metadata from a Wayland compositor.
+package waylandstate
 
 /*
 #cgo pkg-config: wayland-client
@@ -46,4 +46,17 @@ func List(runtime, display string) ([]Window, error) {
 		})
 	}
 	return items, nil
+}
+
+// Size returns the current output dimensions in physical screenshot pixels.
+func Size(runtime, display string) (width, height int, err error) {
+	path := C.CString(filepath.Join(runtime, display))
+	defer C.free(unsafe.Pointer(path))
+	var cwidth C.int
+	var cheight C.int
+	status := C.cu_screen_size(path, &cwidth, &cheight) //nolint:gocritic // cgo call arguments are distinct pointers.
+	if status != 0 {
+		return 0, 0, ErrConnect
+	}
+	return int(cwidth), int(cheight), nil
 }

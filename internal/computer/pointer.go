@@ -1,18 +1,17 @@
 package computer
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"image"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
 
 	"cu/internal/session"
+	"cu/internal/waylandstate"
 
 	virtualpointer "github.com/bnema/wayland-virtual-input-go/virtual_pointer"
 )
@@ -120,17 +119,10 @@ func (action *PointerAction) validate() error {
 }
 
 func screenSize(ctx context.Context, info session.Info) (width, height int, err error) {
-	command := exec.CommandContext(ctx, "grim", "-")
-	command.Env = session.Environment(info.Runtime, info.Display)
-	data, err := command.Output()
-	if err != nil {
-		return 0, 0, fmt.Errorf("read screen size: %w", err)
+	if err := ctx.Err(); err != nil {
+		return 0, 0, err
 	}
-	config, _, err := image.DecodeConfig(bytes.NewReader(data))
-	if err != nil {
-		return 0, 0, fmt.Errorf("decode screen size: %w", err)
-	}
-	return config.Width, config.Height, nil
+	return waylandstate.Size(info.Runtime, info.Display)
 }
 
 func movePointer(device *virtualpointer.VirtualPointer, x, y, width, height int) error {

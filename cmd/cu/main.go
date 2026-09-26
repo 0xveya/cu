@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,11 +12,13 @@ import (
 
 	"cu/internal/computer"
 	"cu/internal/session"
-	"cu/internal/windowlist"
+	"cu/internal/waylandstate"
+
+	"github.com/spf13/cobra"
 )
 
 func main() {
-	code, err := run(os.Args[1:])
+	code, err := execute(os.Args[1:])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "cu:", err)
 		os.Exit(1)
@@ -25,82 +26,253 @@ func main() {
 	os.Exit(code)
 }
 
-func run(args []string) (int, error) {
-	if len(args) == 0 {
-		return 0, usage()
+func execute(args []string) (int, error) {
+	code := 0
+	root := &cobra.Command{Use: "cu", Short: "Control an isolated Labwc desktop", SilenceUsage: true, SilenceErrors: true}
+	root.SetArgs(args)
+	for _, name := range []string{"start", "status", "stop"} {
+		root.AddCommand(lifecycleCommand(name))
 	}
-	switch args[0] {
-	case "help", "-h", "--help":
-		return 0, usage()
-	case "start", "status", "stop":
-		return lifecycle(args[0], args[1:])
-	case "run", "launch":
-		return command(args[0], args[1:])
-	case "screenshot", "type", "key":
-		return input(args[0], args[1:])
-	case "windows":
-		return windows(args[1:])
-	case "move", "click", "drag":
-		return mouse(args[0], args[1:])
-	case "_pointer":
-		if len(args) != 2 || os.Getenv("WAYLAND_DISPLAY") != "wayland-0" ||
-			filepath.Base(filepath.Dir(filepath.Dir(os.Getenv("XDG_RUNTIME_DIR")))) != "cu" {
-			return 0, computer.ErrPointer
-		}
-		return 0, computer.PointerWorker(args[1])
-	default:
-		return 0, fmt.Errorf("unknown command %q (try cu help)", args[0])
+	for _, name := range []string{"run", "launch"} {
+		root.AddCommand(processCommand(name, &code))
+	}
+	for _, name := range []string{"screenshot", "type", "key"} {
+		root.AddCommand(inputCommand(name))
+	}
+	for _, name := range []string{"move", "click", "drag"} {
+		root.AddCommand(pointerCommand(name))
+	}
+	root.AddCommand(windowsCommand(), recordCommand(), pointerWorkerCommand(), recordWorkerCommand())
+	return code, root.ExecuteContext(context.Background())
+}
+
+func required(command *cobra.Command, name string) {
+	if err := command.MarkFlagRequired(name); err != nil {
+		panic(err)
 	}
 }
 
-func mouse(name string, args []string) (int, error) {
-	flags := flag.NewFlagSet(name, flag.ContinueOnError)
-	id := flags.String("id", "", "managed session ID")
-	x := flags.Int("x", -1, "horizontal screenshot coordinate")
-	y := flags.Int("y", -1, "vertical screenshot coordinate")
-	button := flags.String("button", "left", "left, right, or middle (click)")
-	from := flags.String("from", "", "start coordinate X,Y (drag)")
-	to := flags.String("to", "", "end coordinate X,Y (drag)")
-	if err := flags.Parse(args); err != nil {
-		return flagError(err)
+func lifecycleCommand(name string) *cobra.Command {
+	var id string
+	var visible bool
+	description := map[string]string{"start": "Start a Labwc desktop", "status": "Show a desktop's status", "stop": "Stop a desktop"}
+	command := &cobra.Command{Use: name, Short: description[name], Args: cobra.NoArgs}
+	command.Flags().StringVar(&id, "id", "", "session ID")
+	required(command, "id")
+	if name == "start" {
+		command.Flags().BoolVar(&visible, "visible", false, "show the desktop in a host Wayland window")
 	}
-	if *id == "" || flags.NArg() != 0 {
-		return 0, fmt.Errorf("usage: cu %s --id ID [coordinates]", name)
+	command.RunE = func(_ *cobra.Command, _ []string) error {
+		switch name {
+		case "start":
+			info, err := session.Start(id, visible)
+			return output(info, err)
+		case "status":
+			info, err := session.Status(id)
+			return output(info, err)
+		default:
+			if err := session.Stop(id); err != nil {
+				return err
+			}
+			return output(struct {
+				ID      string `json:"id"`
+				Stopped bool   `json:"stopped"`
+			}{id, true}, nil)
+		}
 	}
-	action := computer.PointerAction{Kind: name, X: *x, Y: *y, Button: *button}
+	return command
+}
+
+func processCommand(name string, code *int) *cobra.Command {
+	var id, display string
+	description := map[string]string{"run": "Run a command and wait", "launch": "Launch an app in the desktop"}
+	command := &cobra.Command{Use: name + " --id ID -- COMMAND [ARG...]", Short: description[name], Args: cobra.MinimumNArgs(1)}
+	command.Flags().StringVar(&id, "id", "", "managed session ID")
+	if name == "run" {
+		command.Flags().StringVar(&display, "display", "", "existing Wayland socket name")
+	}
+	command.RunE = func(cmd *cobra.Command, argv []string) error {
+		if (id == "") == (display == "") || (name == "launch" && display != "") {
+			return errors.New("select exactly one managed session with --id (or --display for run)")
+		}
+		if display != "" {
+			var err error
+			*code, err = computer.Run(cmd.Context(), display, argv)
+			return err
+		}
+		info, err := session.Active(id)
+		if err != nil {
+			return err
+		}
+		if name == "run" {
+			*code, err = computer.RunSession(cmd.Context(), info, argv)
+			return err
+		}
+		pid, err := computer.Launch(info, argv)
+		return output(struct {
+			ID  string `json:"id"`
+			PID int    `json:"pid"`
+		}{id, pid}, err)
+	}
+	return command
+}
+
+func inputCommand(name string) *cobra.Command {
+	var id, out, value string
+	description := map[string]string{"screenshot": "Save a PNG of the desktop", "type": "Type text into the desktop", "key": "Press a named key or combination"}
+	command := &cobra.Command{Use: name, Short: description[name], Args: cobra.NoArgs}
+	command.Flags().StringVar(&id, "id", "", "managed session ID")
+	required(command, "id")
+	switch name {
+	case "screenshot":
+		command.Flags().StringVar(&out, "out", "", "PNG output path")
+		required(command, "out")
+	case "type":
+		command.Flags().StringVar(&value, "text", "", "text to type")
+		required(command, "text")
+	case "key":
+		command.Use = "key KEY"
+		command.Args = cobra.ExactArgs(1)
+	}
+	command.RunE = func(cmd *cobra.Command, args []string) error {
+		info, err := session.Active(id)
+		if err != nil {
+			return err
+		}
+		switch name {
+		case "screenshot":
+			path, width, height, err := computer.Screenshot(cmd.Context(), info, out)
+			return output(struct {
+				Path   string `json:"path"`
+				Width  int    `json:"width"`
+				Height int    `json:"height"`
+			}{path, width, height}, err)
+		case "type":
+			return computer.Type(cmd.Context(), info, value)
+		default:
+			return computer.Key(cmd.Context(), info, args[0])
+		}
+	}
+	return command
+}
+
+func pointerCommand(name string) *cobra.Command {
+	var id, button, from, to string
+	var x, y int
+	description := map[string]string{"move": "Move the pointer", "click": "Click at a screenshot coordinate", "drag": "Drag between screenshot coordinates"}
+	command := &cobra.Command{Use: name, Short: description[name], Args: cobra.NoArgs}
+	command.Flags().StringVar(&id, "id", "", "managed session ID")
+	required(command, "id")
 	if name == "drag" {
-		var err error
-		action.X, action.Y, err = point(*from)
-		if err != nil {
-			return 0, err
-		}
-		action.ToX, action.ToY, err = point(*to)
-		if err != nil {
-			return 0, err
-		}
+		command.Flags().StringVar(&from, "from", "", "start coordinate X,Y")
+		command.Flags().StringVar(&to, "to", "", "end coordinate X,Y")
+		required(command, "from")
+		required(command, "to")
+	} else {
+		command.Flags().IntVar(&x, "x", -1, "horizontal screenshot coordinate")
+		command.Flags().IntVar(&y, "y", -1, "vertical screenshot coordinate")
+		required(command, "x")
+		required(command, "y")
 	}
-	info, err := session.Active(*id)
-	if err != nil {
-		return 0, err
+	if name == "click" {
+		command.Flags().StringVar(&button, "button", "left", "left, right, or middle")
 	}
-	return 0, computer.Pointer(context.Background(), info, &action)
+	command.RunE = func(cmd *cobra.Command, _ []string) error {
+		action := computer.PointerAction{Kind: name, X: x, Y: y, Button: button}
+		if name == "drag" {
+			var err error
+			action.X, action.Y, err = point(from)
+			if err != nil {
+				return err
+			}
+			action.ToX, action.ToY, err = point(to)
+			if err != nil {
+				return err
+			}
+		}
+		info, err := session.Active(id)
+		if err != nil {
+			return err
+		}
+		return computer.Pointer(cmd.Context(), info, &action)
+	}
+	return command
 }
 
-func windows(args []string) (int, error) {
-	flags := flag.NewFlagSet("windows", flag.ContinueOnError)
-	id := flags.String("id", "", "managed session ID")
-	if err := flags.Parse(args); err != nil {
-		return flagError(err)
+func windowsCommand() *cobra.Command {
+	var id string
+	command := &cobra.Command{Use: "windows", Short: "List visible windows as JSON", Args: cobra.NoArgs}
+	command.Flags().StringVar(&id, "id", "", "managed session ID")
+	required(command, "id")
+	command.RunE = func(_ *cobra.Command, _ []string) error {
+		info, err := session.Active(id)
+		if err != nil {
+			return err
+		}
+		items, err := waylandstate.List(info.Runtime, info.Display)
+		return output(items, err)
 	}
-	if *id == "" || flags.NArg() != 0 {
-		return 0, errors.New("usage: cu windows --id ID")
+	return command
+}
+
+func recordCommand() *cobra.Command {
+	root := &cobra.Command{Use: "record", Short: "Record the isolated desktop to MP4"}
+	for _, name := range []string{"start", "status", "stop"} {
+		var id, out string
+		var fps int
+		description := map[string]string{"start": "Start a new MP4 recording", "status": "Show recording status", "stop": "Finish and save the recording"}
+		command := &cobra.Command{Use: name, Short: description[name], Args: cobra.NoArgs}
+		command.Flags().StringVar(&id, "id", "", "managed session ID")
+		required(command, "id")
+		if name == "start" {
+			command.Flags().StringVar(&out, "out", "", "new MP4 output path")
+			command.Flags().IntVar(&fps, "fps", 4, "frames per second, 1 to 30")
+			required(command, "out")
+		}
+		command.RunE = func(_ *cobra.Command, _ []string) error {
+			info, err := session.Active(id)
+			if err != nil {
+				return err
+			}
+			var value computer.Recording
+			switch name {
+			case "start":
+				value, err = computer.RecordStart(info, out, fps)
+			case "status":
+				value, err = computer.RecordStatus(info)
+			default:
+				value, err = computer.RecordStop(info)
+			}
+			return output(value, err)
+		}
+		root.AddCommand(command)
 	}
-	info, err := session.Active(*id)
-	if err != nil {
-		return 0, err
+	return root
+}
+
+func pointerWorkerCommand() *cobra.Command {
+	return &cobra.Command{Use: "_pointer ACTION", Hidden: true, Args: cobra.ExactArgs(1), RunE: func(_ *cobra.Command, args []string) error {
+		if os.Getenv("WAYLAND_DISPLAY") != "wayland-0" || filepath.Base(filepath.Dir(filepath.Dir(os.Getenv("XDG_RUNTIME_DIR")))) != "cu" {
+			return computer.ErrPointer
+		}
+		return computer.PointerWorker(args[0])
+	}}
+}
+
+func recordWorkerCommand() *cobra.Command {
+	var id, out string
+	var fps int
+	command := &cobra.Command{Use: "_record", Hidden: true, Args: cobra.NoArgs}
+	command.Flags().StringVar(&id, "id", "", "managed session ID")
+	command.Flags().StringVar(&out, "out", "", "MP4 output path")
+	command.Flags().IntVar(&fps, "fps", 0, "frames per second")
+	command.RunE = func(_ *cobra.Command, _ []string) error {
+		if id == "" || out == "" || fps < 1 || fps > 30 {
+			return errors.New("invalid recording worker arguments")
+		}
+		return computer.RecordWorker(id, out, fps)
 	}
-	items, err := windowlist.List(info.Runtime, info.Display)
-	return 0, output(items, err)
+	return command
 }
 
 func point(value string) (x, y int, err error) {
@@ -119,116 +291,6 @@ func point(value string) (x, y int, err error) {
 	return x, y, nil
 }
 
-func lifecycle(name string, args []string) (int, error) {
-	flags := flag.NewFlagSet(name, flag.ContinueOnError)
-	id := flags.String("id", "", "session ID")
-	var visible *bool
-	if name == "start" {
-		visible = flags.Bool("visible", false, "show the desktop as a window on the host Wayland display")
-	}
-	if err := flags.Parse(args); err != nil {
-		return flagError(err)
-	}
-	if *id == "" || flags.NArg() != 0 {
-		if name == "start" {
-			return 0, errors.New("usage: cu start --id ID [--visible]")
-		}
-		return 0, fmt.Errorf("usage: cu %s --id ID", name)
-	}
-	switch name {
-	case "start":
-		info, err := session.Start(*id, *visible)
-		return 0, output(info, err)
-	case "status":
-		info, err := session.Status(*id)
-		return 0, output(info, err)
-	default:
-		if err := session.Stop(*id); err != nil {
-			return 0, err
-		}
-		return 0, output(struct {
-			ID      string `json:"id"`
-			Stopped bool   `json:"stopped"`
-		}{*id, true}, nil)
-	}
-}
-
-func command(name string, args []string) (int, error) {
-	flags := flag.NewFlagSet(name, flag.ContinueOnError)
-	id := flags.String("id", "", "managed session ID")
-	display := flags.String("display", "", "existing Wayland socket name (run only)")
-	if err := flags.Parse(args); err != nil {
-		return flagError(err)
-	}
-	argv := flags.Args()
-	if len(argv) == 0 || (*id == "" && *display == "") || (*id != "" && *display != "") || (name == "launch" && *display != "") {
-		return 0, fmt.Errorf("usage: cu %s --id ID -- COMMAND [ARG...]", name)
-	}
-	ctx := context.Background()
-	if *display != "" {
-		return computer.Run(ctx, *display, argv)
-	}
-	info, err := session.Active(*id)
-	if err != nil {
-		return 0, err
-	}
-	if name == "run" {
-		return computer.RunSession(ctx, info, argv)
-	}
-	pid, err := computer.Launch(info, argv)
-	return 0, output(struct {
-		ID  string `json:"id"`
-		PID int    `json:"pid"`
-	}{*id, pid}, err)
-}
-
-func input(name string, args []string) (int, error) {
-	flags := flag.NewFlagSet(name, flag.ContinueOnError)
-	id := flags.String("id", "", "managed session ID")
-	out := flags.String("out", "", "PNG output path (screenshot)")
-	value := flags.String("text", "", "text to type (type)")
-	if err := flags.Parse(args); err != nil {
-		return flagError(err)
-	}
-	if *id == "" {
-		return 0, fmt.Errorf("%s requires --id ID", name)
-	}
-	info, err := session.Active(*id)
-	if err != nil {
-		return 0, err
-	}
-	ctx := context.Background()
-	switch name {
-	case "screenshot":
-		if *out == "" || flags.NArg() != 0 {
-			return 0, errors.New("usage: cu screenshot --id ID --out FILE.png")
-		}
-		path, width, height, err := computer.Screenshot(ctx, info, *out)
-		return 0, output(struct {
-			Path   string `json:"path"`
-			Width  int    `json:"width"`
-			Height int    `json:"height"`
-		}{path, width, height}, err)
-	case "type":
-		if flags.NArg() != 0 {
-			return 0, errors.New("usage: cu type --id ID --text TEXT")
-		}
-		return 0, computer.Type(ctx, info, *value)
-	default:
-		if flags.NArg() != 1 {
-			return 0, errors.New("usage: cu key --id ID KEY (example: ctrl+l)")
-		}
-		return 0, computer.Key(ctx, info, flags.Arg(0))
-	}
-}
-
-func flagError(err error) (int, error) {
-	if errors.Is(err, flag.ErrHelp) {
-		return 0, nil
-	}
-	return 0, err
-}
-
 func output(value any, err error) error {
 	if err != nil {
 		return err
@@ -237,13 +299,4 @@ func output(value any, err error) error {
 		return fmt.Errorf("write output: %w", err)
 	}
 	return nil
-}
-
-func usage() error {
-	_, err := fmt.Fprintln(os.Stdout, "cu controls an isolated Labwc desktop")
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintln(os.Stdout, "commands: start, status, stop, run, launch, screenshot, type, key, move, click, drag, windows")
-	return err
 }

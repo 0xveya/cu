@@ -6,9 +6,11 @@ Labwc and launched apps alive between CLI calls.
 
 The first version supports desktop lifecycle, command execution, app launch,
 PNG screenshots, text input, named key presses, and pointer movement, clicks,
-and drags. It requires Linux with a
-running user systemd manager, `labwc`, `grim`, and `wtype` on `PATH`. The demo
+and drags. It requires Linux with a running user systemd manager, `labwc`,
+`grim`, and `wtype` on `PATH`. Recording also requires `ffmpeg`. The demo
 also uses `foot`.
+
+Building requires the `wayland-client` development package and `pkg-config`.
 
 ## Try it
 
@@ -38,6 +40,9 @@ bin/cu click --id agent-1 --x 500 --y 400 --button right
 bin/cu drag --id agent-1 --from 500,200 --to 800,400
 bin/cu windows --id agent-1
 bin/cu screenshot --id agent-1 --out /tmp/agent-1.png
+bin/cu record start --id agent-1 --out /tmp/agent-1.mp4
+bin/cu record status --id agent-1
+bin/cu record stop --id agent-1
 bin/cu stop --id agent-1
 ```
 
@@ -49,6 +54,12 @@ the program starts. The original direct wrapper still works with `cu run
 Session commands return JSON. `windows` returns a compact JSON array of visible
 app IDs and titles, so an agent can check which apps are open before requesting
 a screenshot. Input commands return no output on success.
+Recording captures only the named Labwc desktop, including its apps, and
+returns the MP4 path as JSON. It keeps recording while other `cu` commands run.
+Visible sessions record at their current desktop size; headless recordings
+default to 1920×1080. `record status` reports the output dimensions.
+For a browser that fills the recording, focus it and use `cu key --id agent-1
+F11` before recording.
 If Labwc fails to start, `cu` prints the exact `journalctl` command for its
 service. Screenshots and input always require a managed session ID, so they
 cannot target the host display by accident.
