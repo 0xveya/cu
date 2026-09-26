@@ -219,7 +219,7 @@ func recordCommand() *cobra.Command {
 	root := &cobra.Command{Use: "record", Short: "Record the isolated desktop to MP4"}
 	for _, name := range []string{"start", "status", "stop"} {
 		var id, out string
-		var fps int
+		var fps, speed int
 		description := map[string]string{"start": "Start a new MP4 recording", "status": "Show recording status", "stop": "Finish and save the recording"}
 		command := &cobra.Command{Use: name, Short: description[name], Args: cobra.NoArgs}
 		command.Flags().StringVar(&id, "id", "", "managed session ID")
@@ -227,6 +227,7 @@ func recordCommand() *cobra.Command {
 		if name == "start" {
 			command.Flags().StringVar(&out, "out", "", "new MP4 output path")
 			command.Flags().IntVar(&fps, "fps", 4, "frames per second, 1 to 30")
+			command.Flags().IntVar(&speed, "speed", 4, "playback speed, 1 to 16 times real time")
 			required(command, "out")
 		}
 		command.RunE = func(_ *cobra.Command, _ []string) error {
@@ -237,7 +238,7 @@ func recordCommand() *cobra.Command {
 			var value computer.Recording
 			switch name {
 			case "start":
-				value, err = computer.RecordStart(info, out, fps)
+				value, err = computer.RecordStart(info, out, fps, speed)
 			case "status":
 				value, err = computer.RecordStatus(info)
 			default:
@@ -261,16 +262,17 @@ func pointerWorkerCommand() *cobra.Command {
 
 func recordWorkerCommand() *cobra.Command {
 	var id, out string
-	var fps int
+	var fps, speed int
 	command := &cobra.Command{Use: "_record", Hidden: true, Args: cobra.NoArgs}
 	command.Flags().StringVar(&id, "id", "", "managed session ID")
 	command.Flags().StringVar(&out, "out", "", "MP4 output path")
 	command.Flags().IntVar(&fps, "fps", 0, "frames per second")
+	command.Flags().IntVar(&speed, "speed", 0, "playback speed")
 	command.RunE = func(_ *cobra.Command, _ []string) error {
-		if id == "" || out == "" || fps < 1 || fps > 30 {
+		if id == "" || out == "" || fps < 1 || fps > 30 || speed < 1 || speed > 16 {
 			return errors.New("invalid recording worker arguments")
 		}
-		return computer.RecordWorker(id, out, fps)
+		return computer.RecordWorker(id, out, fps, speed)
 	}
 	return command
 }

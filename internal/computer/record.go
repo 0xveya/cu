@@ -28,15 +28,19 @@ var (
 type Recording struct {
 	Path    string `json:"path"`
 	FPS     int    `json:"fps"`
+	Speed   int    `json:"speed"`
 	Width   int    `json:"width"`
 	Height  int    `json:"height"`
 	Running bool   `json:"running"`
 }
 
 // RecordStart starts capturing a managed desktop to a new MP4 file.
-func RecordStart(info session.Info, out string, fps int) (Recording, error) {
+func RecordStart(info session.Info, out string, fps, speed int) (Recording, error) {
 	if fps < 1 || fps > 30 {
 		return Recording{}, errors.New("recording FPS must be between 1 and 30")
+	}
+	if speed < 1 || speed > 16 {
+		return Recording{}, errors.New("recording speed must be between 1 and 16")
 	}
 	if _, err := exec.LookPath("grim"); err != nil {
 		return Recording{}, fmt.Errorf("find grim: %w", err)
@@ -75,7 +79,7 @@ func RecordStart(info session.Info, out string, fps int) (Recording, error) {
 		width += width % 2
 		height += height % 2
 	}
-	recording := Recording{Path: path, FPS: fps, Width: width, Height: height, Running: true}
+	recording := Recording{Path: path, FPS: fps, Speed: speed, Width: width, Height: height, Running: true}
 	data, err := json.Marshal(recording)
 	if err != nil {
 		return Recording{}, fmt.Errorf("encode recording: %w", err)
@@ -88,7 +92,7 @@ func RecordStart(info session.Info, out string, fps int) (Recording, error) {
 	// #nosec G204 -- self is the current cu executable; path and FPS are explicit CLI arguments.
 	command := exec.CommandContext(context.Background(), "systemd-run", "--user", "--collect",
 		"--unit="+session.RecordUnit(info.ID), "--slice="+session.Slice(info.ID), "--service-type=exec",
-		self, "_record", "--id", info.ID, "--out", path, "--fps", fmt.Sprint(fps))
+		self, "_record", "--id", info.ID, "--out", path, "--fps", fmt.Sprint(fps), "--speed", fmt.Sprint(speed))
 	output, err := command.CombinedOutput()
 	if err != nil {
 		_ = os.Remove(statePath)
@@ -162,7 +166,7 @@ func RecordStop(info session.Info) (Recording, error) {
 }
 
 // RecordWorker captures the desktop and closes FFmpeg cleanly on INT or TERM.
-func RecordWorker(id, out string, fps int) error {
+func RecordWorker(id, out string, fps, speed int) error {
 	info, err := session.Active(id)
 	if err != nil {
 		return err
@@ -173,9 +177,12 @@ func RecordWorker(id, out string, fps int) error {
 	if !info.Visible {
 		filter = "scale=1920:1080:flags=bilinear"
 	}
+	if speed > 1 {
+		filter += ",drawtext=text='" + fmt.Sprint(speed) + "x':fontcolor=white:fontsize=38:box=1:boxcolor=black@0.75:boxborderw=10:x=w-tw-24:y=24"
+	}
 	// #nosec G204 -- out and fps come from the validated recording state for this managed session.
 	encoder := exec.CommandContext(context.WithoutCancel(ctx), "ffmpeg", "-hide_banner", "-loglevel", "error", "-n",
-		"-f", "image2pipe", "-framerate", fmt.Sprint(fps), "-vcodec", "ppm", "-i", "pipe:0",
+		"-f", "image2pipe", "-framerate", fmt.Sprint(fps*speed), "-vcodec", "ppm", "-i", "pipe:0",
 		"-vf", filter, "-c:v", "libx264", "-preset", "ultrafast",
 		"-pix_fmt", "yuv420p", "-movflags", "+faststart", "-f", "mp4", out)
 	input, err := encoder.StdinPipe()
