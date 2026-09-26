@@ -1,3 +1,3 @@
-module github.com/0xveya/cu
+module cu
 
 go 1.26.5
