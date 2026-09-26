@@ -7,6 +7,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 
 	"cu/internal/computer"
 	"cu/internal/session"
@@ -34,9 +37,66 @@ func run(args []string) (int, error) {
 		return command(args[0], args[1:])
 	case "screenshot", "type", "key":
 		return input(args[0], args[1:])
+	case "move", "click", "drag":
+		return mouse(args[0], args[1:])
+	case "_pointer":
+		if len(args) != 2 || os.Getenv("WAYLAND_DISPLAY") != "wayland-0" ||
+			filepath.Base(filepath.Dir(filepath.Dir(os.Getenv("XDG_RUNTIME_DIR")))) != "cu" {
+			return 0, computer.ErrPointer
+		}
+		return 0, computer.PointerWorker(args[1])
 	default:
 		return 0, fmt.Errorf("unknown command %q (try cu help)", args[0])
 	}
+}
+
+func mouse(name string, args []string) (int, error) {
+	flags := flag.NewFlagSet(name, flag.ContinueOnError)
+	id := flags.String("id", "", "managed session ID")
+	x := flags.Int("x", -1, "horizontal screenshot coordinate")
+	y := flags.Int("y", -1, "vertical screenshot coordinate")
+	button := flags.String("button", "left", "left, right, or middle (click)")
+	from := flags.String("from", "", "start coordinate X,Y (drag)")
+	to := flags.String("to", "", "end coordinate X,Y (drag)")
+	if err := flags.Parse(args); err != nil {
+		return flagError(err)
+	}
+	if *id == "" || flags.NArg() != 0 {
+		return 0, fmt.Errorf("usage: cu %s --id ID [coordinates]", name)
+	}
+	action := computer.PointerAction{Kind: name, X: *x, Y: *y, Button: *button}
+	if name == "drag" {
+		var err error
+		action.X, action.Y, err = point(*from)
+		if err != nil {
+			return 0, err
+		}
+		action.ToX, action.ToY, err = point(*to)
+		if err != nil {
+			return 0, err
+		}
+	}
+	info, err := session.Active(*id)
+	if err != nil {
+		return 0, err
+	}
+	return 0, computer.Pointer(context.Background(), info, &action)
+}
+
+func point(value string) (x, y int, err error) {
+	left, right, found := strings.Cut(value, ",")
+	if !found {
+		return 0, 0, errors.New("coordinate must be X,Y")
+	}
+	x, err = strconv.Atoi(left)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid x coordinate: %w", err)
+	}
+	y, err = strconv.Atoi(right)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid y coordinate: %w", err)
+	}
+	return x, y, nil
 }
 
 func lifecycle(name string, args []string) (int, error) {
@@ -160,10 +220,10 @@ func output(value any, err error) error {
 }
 
 func usage() error {
-	_, err := fmt.Fprintln(os.Stdout, "cu controls a headless Labwc desktop")
+	_, err := fmt.Fprintln(os.Stdout, "cu controls an isolated Labwc desktop")
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintln(os.Stdout, "commands: start, status, stop, run, launch, screenshot, type, key")
+	_, err = fmt.Fprintln(os.Stdout, "commands: start, status, stop, run, launch, screenshot, type, key, move, click, drag")
 	return err
 }
