@@ -23,3 +23,8 @@ run = "go build -o bin/cu ./cmd/cu"
 [tasks.run]
 description = "Run cu with arguments after --"
 run = "go run ./cmd/cu"
+
+[tasks.demo]
+description = "Run a short headless desktop demo and save a screenshot"
+depends = ["build"]
+run = "./examples/demo.sh"
