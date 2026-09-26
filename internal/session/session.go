@@ -33,13 +33,23 @@ type Info struct {
 	Display   string `json:"display"`
 	Runtime   string `json:"runtime_dir"`
 	Running   bool   `json:"running"`
+	Visible   bool   `json:"visible"`
 }
 
-// Start creates one headless desktop. An existing session ID must be stopped first.
-func Start(id string) (Info, error) {
+// Start creates a desktop. Visible sessions open a window on the host Wayland display.
+func Start(id string, visible bool) (Info, error) {
 	dir, err := sessionDir(id)
 	if err != nil {
 		return Info{}, err
+	}
+	backend := "headless"
+	parentDisplay := ""
+	if visible {
+		parentDisplay, err = hostDisplay()
+		if err != nil {
+			return Info{}, err
+		}
+		backend = "wayland"
 	}
 	err = os.MkdirAll(filepath.Dir(dir), 0o700)
 	if err != nil {
@@ -70,8 +80,8 @@ func Start(id string) (Info, error) {
 	// #nosec G204 -- all variable arguments are paths beneath the validated session directory.
 	command := exec.CommandContext(context.Background(), "systemd-run", "--user", "--collect",
 		"--unit="+unit, "--slice="+Slice(id), "--service-type=exec",
-		"--setenv=XDG_RUNTIME_DIR="+runtimeDir, "--setenv=WAYLAND_DISPLAY=",
-		"--setenv=WLR_BACKENDS=headless", "--setenv=WLR_LIBINPUT_NO_DEVICES=1",
+		"--setenv=XDG_RUNTIME_DIR="+runtimeDir, "--setenv=WAYLAND_DISPLAY="+parentDisplay,
+		"--setenv=WLR_BACKENDS="+backend, "--setenv=WLR_LIBINPUT_NO_DEVICES=1",
 		"labwc", "-C", configDir)
 	output, err := command.CombinedOutput()
 	if err != nil {
@@ -83,7 +93,7 @@ func Start(id string) (Info, error) {
 		}
 	}()
 
-	info := Info{ID: id, Display: display, Runtime: runtimeDir, Running: true}
+	info := Info{ID: id, Display: display, Runtime: runtimeDir, Running: true, Visible: visible}
 	deadline := time.Now().Add(8 * time.Second)
 	for time.Now().Before(deadline) {
 		info.StartTime = 0
@@ -109,6 +119,25 @@ func Start(id string) (Info, error) {
 	}
 	ready = true
 	return info, nil
+}
+
+func hostDisplay() (string, error) {
+	name := os.Getenv("WAYLAND_DISPLAY")
+	if name == "" {
+		return "", errors.New("WAYLAND_DISPLAY is unset; start --visible from your host Wayland desktop")
+	}
+	if !filepath.IsAbs(name) {
+		name = filepath.Join(os.Getenv("XDG_RUNTIME_DIR"), name)
+	}
+	// #nosec G703 -- this is the host display path explicitly supplied by the caller's environment.
+	info, err := os.Stat(name)
+	if err != nil {
+		return "", fmt.Errorf("host Wayland display: %w", err)
+	}
+	if info.Mode()&os.ModeSocket == 0 {
+		return "", errors.New("host Wayland display is not a socket")
+	}
+	return name, nil
 }
 
 // Status reports the stored session and checks its process and socket.

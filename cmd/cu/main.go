@@ -42,15 +42,22 @@ func run(args []string) (int, error) {
 func lifecycle(name string, args []string) (int, error) {
 	flags := flag.NewFlagSet(name, flag.ContinueOnError)
 	id := flags.String("id", "", "session ID")
+	var visible *bool
+	if name == "start" {
+		visible = flags.Bool("visible", false, "show the desktop as a window on the host Wayland display")
+	}
 	if err := flags.Parse(args); err != nil {
 		return flagError(err)
 	}
 	if *id == "" || flags.NArg() != 0 {
+		if name == "start" {
+			return 0, errors.New("usage: cu start --id ID [--visible]")
+		}
 		return 0, fmt.Errorf("usage: cu %s --id ID", name)
 	}
 	switch name {
 	case "start":
-		info, err := session.Start(*id)
+		info, err := session.Start(*id, *visible)
 		return 0, output(info, err)
 	case "status":
 		info, err := session.Status(*id)

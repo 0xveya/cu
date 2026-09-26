@@ -1,8 +1,8 @@
 # cu
 
-`cu` is a Go CLI for a headless Labwc desktop. Each session has its own Wayland
-socket under `$XDG_RUNTIME_DIR/cu/<id>/`. The user systemd manager keeps Labwc
-and launched apps alive between CLI calls.
+`cu` is a Go CLI for an isolated Labwc desktop. Each session has its own
+Wayland socket under `$XDG_RUNTIME_DIR/cu/<id>/`. The user systemd manager keeps
+Labwc and launched apps alive between CLI calls.
 
 The first version supports desktop lifecycle, command execution, app launch,
 PNG screenshots, text input, and named key presses. It requires Linux with a
@@ -24,7 +24,7 @@ choose another screenshot path.
 ```sh
 mise run build
 
-bin/cu start --id agent-1
+bin/cu start --id agent-1 --visible
 bin/cu status --id agent-1
 bin/cu launch --id agent-1 -- foot
 bin/cu run --id agent-1 -- env
@@ -45,6 +45,13 @@ If Labwc fails to start, `cu` prints the exact `journalctl` command for its
 service. Screenshots and input always require a managed session ID, so they
 cannot target the host display by accident.
 
+`start --visible` opens the nested Labwc desktop as a window on your current
+Wayland desktop. It returns immediately, so you can keep watching the window
+while another terminal or agent uses `cu launch`, `cu type`, and the other
+commands with that ID. Run `cu stop --id agent-1` to close it. Omit `--visible`
+to start a headless session instead; visibility is chosen when the session
+starts.
+
 ## Development
 
 ```sh
@@ -54,5 +61,4 @@ mise run test:go
 mise run build
 ```
 
-Mouse input, window listing, observation, and MCP adapters are not implemented
-yet.
+Mouse input, window listing, and MCP adapters are not implemented yet.
