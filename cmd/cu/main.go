@@ -13,6 +13,7 @@ import (
 
 	"cu/internal/computer"
 	"cu/internal/session"
+	"cu/internal/windowlist"
 )
 
 func main() {
@@ -37,6 +38,8 @@ func run(args []string) (int, error) {
 		return command(args[0], args[1:])
 	case "screenshot", "type", "key":
 		return input(args[0], args[1:])
+	case "windows":
+		return windows(args[1:])
 	case "move", "click", "drag":
 		return mouse(args[0], args[1:])
 	case "_pointer":
@@ -81,6 +84,23 @@ func mouse(name string, args []string) (int, error) {
 		return 0, err
 	}
 	return 0, computer.Pointer(context.Background(), info, &action)
+}
+
+func windows(args []string) (int, error) {
+	flags := flag.NewFlagSet("windows", flag.ContinueOnError)
+	id := flags.String("id", "", "managed session ID")
+	if err := flags.Parse(args); err != nil {
+		return flagError(err)
+	}
+	if *id == "" || flags.NArg() != 0 {
+		return 0, errors.New("usage: cu windows --id ID")
+	}
+	info, err := session.Active(*id)
+	if err != nil {
+		return 0, err
+	}
+	items, err := windowlist.List(info.Runtime, info.Display)
+	return 0, output(items, err)
 }
 
 func point(value string) (x, y int, err error) {
@@ -224,6 +244,6 @@ func usage() error {
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintln(os.Stdout, "commands: start, status, stop, run, launch, screenshot, type, key, move, click, drag")
+	_, err = fmt.Fprintln(os.Stdout, "commands: start, status, stop, run, launch, screenshot, type, key, move, click, drag, windows")
 	return err
 }

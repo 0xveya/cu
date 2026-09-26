@@ -36,6 +36,7 @@ bin/cu move --id agent-1 --x 500 --y 400
 bin/cu click --id agent-1 --x 500 --y 400
 bin/cu click --id agent-1 --x 500 --y 400 --button right
 bin/cu drag --id agent-1 --from 500,200 --to 800,400
+bin/cu windows --id agent-1
 bin/cu screenshot --id agent-1 --out /tmp/agent-1.png
 bin/cu stop --id agent-1
 ```
@@ -45,7 +46,9 @@ the program starts. The original direct wrapper still works with `cu run
 --display NAME -- COMMAND` for an existing socket in the caller's
 `XDG_RUNTIME_DIR`.
 
-Session commands return JSON. Input commands return no output on success.
+Session commands return JSON. `windows` returns a compact JSON array of visible
+app IDs and titles, so an agent can check which apps are open before requesting
+a screenshot. Input commands return no output on success.
 If Labwc fails to start, `cu` prints the exact `journalctl` command for its
 service. Screenshots and input always require a managed session ID, so they
 cannot target the host display by accident.
@@ -66,4 +69,4 @@ mise run test:go
 mise run build
 ```
 
-Scroll input, window listing, and MCP adapters are not implemented yet.
+Scroll input and MCP adapters are not implemented yet.
