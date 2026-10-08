@@ -146,7 +146,7 @@ func Status(id string) (Info, error) {
 	if err != nil {
 		return Info{}, err
 	}
-	// #nosec G304 -- dir is beneath XDG_RUNTIME_DIR/cu and id is a validated name.
+	// #nosec G304,G703 -- dir is beneath XDG_RUNTIME_DIR/cu and id is a validated name.
 	data, err := os.ReadFile(filepath.Join(dir, "state.json"))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {

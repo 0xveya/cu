@@ -1,19 +1,34 @@
-# Horse desktop demo
+# Horse in Calc
 
-Use the `cu` CLI to carry out this task in a visible isolated desktop. Inspect
-screenshots with the agent's native image viewer after important GUI actions.
-Open the horse image directly in Chromium:
-`https://images.unsplash.com/photo-1580418358438-459ed25cc363`.
-Open at least seven tabs with that image, then drag the extra tabs down out of
-the tab bar to create separate browser windows. Resize and move the windows so
-the horse pictures themselves form a recognizable horse silhouette on the
-desktop. Capture a screenshot of the arrangement.
+Use the stateless `cu` MCP tools to draw a detailed horse in a real isolated
+LibreOffice Calc desktop.
 
-Open LibreOffice Calc. Enter a small table with `Horses = 2`, `Windows = 3`,
-and `Total = SUM(B1:B2)`. Resize columns by dragging a header boundary, then
-use the background color palette to draw a horse silhouette in cells and add
-a second color for its mane and green ground. Save a screenshot and an MP4
-recording of the isolated desktop. `cu record start` uses 4× playback by
-default and labels the speed in a video corner. Capture a final screenshot of
-Calc and finish the recording. Leave the session open so the user can inspect
-it afterward.
+On a sheet named `Pen`, use Calc's unfilled freeform drawing tool and held-button
+`path` actions. Draw a continuous silhouette, four articulated legs, hooves,
+mane, tail, eye, nostril, and anatomical lines. Use smooth curves and black
+lines. Inspect native screenshots after meaningful batches.
+
+On a sheet named `Tiles`, draw the horse with tiny square cells and four colors.
+Show it at 20% zoom. Raw integer values may be pasted through the desktop
+clipboard; select matching values with Calc's Find All and apply backgrounds
+through its palette. Hide the values with the `;;;` number format. Do not
+import a finished spreadsheet, graphic, SVG, macro, or UNO formatting script.
+All drawing and formatting must happen through the application's GUI.
+
+Save `horse.ods`, a screenshot of each sheet, and recordings of both workflows.
+Label accelerated playback and cuts explicitly. Leave the saved workbook open
+on `Tiles` without dialogs or selected drawing objects.
+
+## Recorded result
+
+- `horse.ods`: 53 native drawing objects on `Pen`; a 180 × 110 cell canvas on
+  `Tiles`, with 4,448 colored cells and four tones.
+- `horse.png` and `tiles.png`: native 1280 × 720 desktop captures.
+- `horse.mp4`: successful pen drawing, 4× playback.
+- `tiles.mp4`: real GUI selection, four palette passes, number formatting, and
+  saving; 4× playback with cuts between steps.
+
+The tile values and all four background colors were checked in the saved ODS,
+then the clean result was inspected in Calc. The four palette passes took
+about 5.1 seconds of tool execution after the values were pasted. This excludes
+application setup, data preparation, inspection, and input debugging.

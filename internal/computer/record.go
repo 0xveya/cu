@@ -247,6 +247,11 @@ func captureFrames(ctx context.Context, info session.Info, interval time.Duratio
 			}
 			return
 		}
+		err = overlayCursor(info, pixels)
+		if err != nil {
+			failures <- err
+			return
+		}
 		select {
 		case frames <- pixels:
 		default:

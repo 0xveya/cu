@@ -4,11 +4,10 @@
 Wayland socket under `$XDG_RUNTIME_DIR/cu/<id>/`. The user systemd manager keeps
 Labwc and launched apps alive between CLI calls.
 
-The first version supports desktop lifecycle, command execution, app launch,
-PNG screenshots, text input, named key presses, and pointer movement, clicks,
-and drags. It requires Linux with a running user systemd manager, `labwc`,
-`grim`, and `wtype` on `PATH`. Recording also requires `ffmpeg`. The demo
-also uses `foot`.
+It supports desktop lifecycle, command execution, app launch, inline MCP
+images, text input, named key presses, pointer paths, clicks, drags, and scrolling.
+It requires Linux with a running user systemd manager, `labwc`, `grim`, and
+`wtype` on `PATH`. Recording also requires `ffmpeg`.
 
 Building requires the `wayland-client` development package and `pkg-config`.
 
@@ -16,9 +15,9 @@ Building requires the `wayland-client` development package and `pkg-config`.
 
 Build with `mise run build`, then give your agent the
 [horse demo prompt](examples/horse/PROMPT.md). It asks the agent to use `cu`
-to arrange browser windows and draw a horse in Calc, inspecting the desktop
-after each significant action. The task needs Chromium and LibreOffice Calc
-as well as the runtime dependencies above.
+to draw a horse with the pen tool and colored cells in LibreOffice Calc,
+inspecting the desktop after significant actions. The workbook, screenshots,
+and recordings are in `examples/horse/`.
 
 ## Commands
 
@@ -36,6 +35,7 @@ bin/cu move --id agent-1 --x 500 --y 400
 bin/cu click --id agent-1 --x 500 --y 400
 bin/cu click --id agent-1 --x 500 --y 400 --button right
 bin/cu drag --id agent-1 --from 500,200 --to 800,400
+bin/cu scroll --id agent-1 --x 500 --y 400 --delta-y 120
 bin/cu windows --id agent-1
 bin/cu screenshot --id agent-1 --out /tmp/agent-1.png
 bin/cu record start --id agent-1 --out /tmp/agent-1.mp4
@@ -80,4 +80,47 @@ mise run test:go
 mise run build
 ```
 
-Scroll input and MCP adapters are not implemented yet.
+## Codex computer use
+
+```sh
+mise run build
+codex mcp add cu -- /absolute/path/to/cu/bin/cu mcp
+mkdir -p ~/.agents/skills
+ln -s /absolute/path/to/cu/skills/cu-computer-use ~/.agents/skills/cu-computer-use
+```
+
+Restart Codex to discover the tools and skill. The default stdio server is
+launched by the client. For stateless Streamable HTTP instead, keep this command
+running and register its URL:
+
+```sh
+bin/cu mcp --listen 127.0.0.1:7331
+codex mcp add cu --url http://127.0.0.1:7331/mcp
+```
+
+The official MCP Go SDK handles protocol `2026-07-28`, including handshake-free
+requests with per-request metadata, and older clients. HTTP is loopback-only,
+uses JSON responses, and keeps no MCP session IDs. Managed desktop sessions
+remain independent of transport connections. Each desktop keeps one agent
+pointer device alive across calls, so menu interactions do not recreate
+the input device at every click.
+
+`desktop_session` manages desktops, `desktop_launch` opens apps,
+`desktop_observe` returns window titles and an original-size inline PNG,
+`desktop_act` runs up to 64 ordered input actions and returns one inline image,
+and `desktop_record` manages MP4 capture. No screenshot file or separate image
+loading call is needed. `windows_only: true` skips the image in an observation;
+`observe: false` skips it after input. Input batches stop at their first error
+and report completed actions, so observe before retrying a partial batch.
+
+For freehand drawing, a `path` action holds the left button along up to 8192
+`points: [{"x": 100, "y": 200}, ...]` in one pointer connection. Set
+`duration_ms` from 0 to 5000 to control pacing. Coordinates remain unscaled
+screenshot pixels. Calls always name an isolated session; independent agents
+should use distinct IDs and never issue concurrent input on the same desktop.
+
+Recordings add a visible agent cursor and click ring, including motion through
+paths and drags. For smooth real-time playback, use `--fps 12 --speed 1`.
+
+Desktop isolation selects a different Wayland socket. Applications still run
+as your user with access to your files and network.

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -39,10 +40,10 @@ func execute(args []string) (int, error) {
 	for _, name := range []string{"screenshot", "type", "key"} {
 		root.AddCommand(inputCommand(name))
 	}
-	for _, name := range []string{"move", "click", "drag"} {
+	for _, name := range []string{"move", "click", "drag", "scroll"} {
 		root.AddCommand(pointerCommand(name))
 	}
-	root.AddCommand(windowsCommand(), recordCommand(), pointerWorkerCommand(), recordWorkerCommand())
+	root.AddCommand(windowsCommand(), recordCommand(), pointerWorkerCommand(), recordWorkerCommand(), mcpCommand(), pointerStreamWorkerCommand(true), pointerStreamWorkerCommand(false))
 	return code, root.ExecuteContext(context.Background())
 }
 
@@ -158,8 +159,8 @@ func inputCommand(name string) *cobra.Command {
 
 func pointerCommand(name string) *cobra.Command {
 	var id, button, from, to string
-	var x, y int
-	description := map[string]string{"move": "Move the pointer", "click": "Click at a screenshot coordinate", "drag": "Drag between screenshot coordinates"}
+	var x, y, deltaX, deltaY int
+	description := map[string]string{"move": "Move the pointer", "click": "Click at a screenshot coordinate", "drag": "Drag between screenshot coordinates", "scroll": "Scroll at a screenshot coordinate"}
 	command := &cobra.Command{Use: name, Short: description[name], Args: cobra.NoArgs}
 	command.Flags().StringVar(&id, "id", "", "managed session ID")
 	required(command, "id")
@@ -174,11 +175,15 @@ func pointerCommand(name string) *cobra.Command {
 		required(command, "x")
 		required(command, "y")
 	}
+	if name == "scroll" {
+		command.Flags().IntVar(&deltaX, "delta-x", 0, "horizontal scroll pixels; positive is right")
+		command.Flags().IntVar(&deltaY, "delta-y", 0, "vertical scroll pixels; positive is down")
+	}
 	if name == "click" {
 		command.Flags().StringVar(&button, "button", "left", "left, right, or middle")
 	}
 	command.RunE = func(cmd *cobra.Command, _ []string) error {
-		action := computer.PointerAction{Kind: name, X: x, Y: y, Button: button}
+		action := computer.PointerAction{Kind: name, X: x, Y: y, Button: button, DeltaX: deltaX, DeltaY: deltaY}
 		if name == "drag" {
 			var err error
 			action.X, action.Y, err = point(from)
@@ -256,7 +261,15 @@ func pointerWorkerCommand() *cobra.Command {
 		if os.Getenv("WAYLAND_DISPLAY") != "wayland-0" || filepath.Base(filepath.Dir(filepath.Dir(os.Getenv("XDG_RUNTIME_DIR")))) != "cu" {
 			return computer.ErrPointer
 		}
-		return computer.PointerWorker(args[0])
+		encoded := args[0]
+		if encoded == "-" {
+			data, err := io.ReadAll(io.LimitReader(os.Stdin, 2<<20))
+			if err != nil {
+				return err
+			}
+			encoded = string(data)
+		}
+		return computer.PointerWorker(encoded)
 	}}
 }
 

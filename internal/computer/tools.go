@@ -46,7 +46,7 @@ func Screenshot(ctx context.Context, info session.Info, out string) (path string
 
 // Type sends text through Labwc's virtual keyboard protocol.
 func Type(ctx context.Context, info session.Info, value string) error {
-	return tool(ctx, info, strings.NewReader(value), "wtype", "-")
+	return tool(ctx, info, strings.NewReader(value), "wtype", "-s", "30", "-", "-s", "30")
 }
 
 // Key presses one named key, optionally with modifiers such as ctrl+shift+l.
@@ -55,7 +55,9 @@ func Key(ctx context.Context, info session.Info, combination string) error {
 	if len(parts) == 0 || parts[len(parts)-1] == "" {
 		return fmt.Errorf("invalid key %q", combination)
 	}
-	args := make([]string, 0, len(parts)*4)
+	args := make([]string, 0, len(parts)*4+4)
+	// A fresh virtual keyboard needs a short settle before named key events.
+	args = append(args, "-s", "30")
 	for _, modifier := range parts[:len(parts)-1] {
 		switch modifier {
 		case "ctrl", "shift", "alt", "logo", "altgr":
@@ -68,6 +70,7 @@ func Key(ctx context.Context, info session.Info, combination string) error {
 	for index := len(parts) - 2; index >= 0; index-- {
 		args = append(args, "-m", parts[index])
 	}
+	args = append(args, "-s", "30")
 	return tool(ctx, info, nil, "wtype", args...)
 }
 
