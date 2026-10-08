@@ -43,7 +43,7 @@ func execute(args []string) (int, error) {
 	for _, name := range []string{"move", "click", "drag", "scroll"} {
 		root.AddCommand(pointerCommand(name))
 	}
-	root.AddCommand(windowsCommand(), recordCommand(), pointerWorkerCommand(), recordWorkerCommand(), mcpCommand(), pointerStreamWorkerCommand(true), pointerStreamWorkerCommand(false))
+	root.AddCommand(windowsCommand(), recordCommand(), pointerWorkerCommand(), recordWorkerCommand(), mcpCommand(), viewerCommand(), pointerStreamWorkerCommand(true), pointerStreamWorkerCommand(false))
 	return code, root.ExecuteContext(context.Background())
 }
 

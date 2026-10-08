@@ -36,6 +36,7 @@ bin/cu click --id agent-1 --x 500 --y 400
 bin/cu click --id agent-1 --x 500 --y 400 --button right
 bin/cu drag --id agent-1 --from 500,200 --to 800,400
 bin/cu scroll --id agent-1 --x 500 --y 400 --delta-y 120
+bin/cu view --id agent-1
 bin/cu windows --id agent-1
 bin/cu screenshot --id agent-1 --out /tmp/agent-1.png
 bin/cu record start --id agent-1 --out /tmp/agent-1.mp4
@@ -118,6 +119,16 @@ For freehand drawing, a `path` action holds the left button along up to 8192
 `duration_ms` from 0 to 5000 to control pacing. Coordinates remain unscaled
 screenshot pixels. Calls always name an isolated session; independent agents
 should use distinct IDs and never issue concurrent input on the same desktop.
+
+`bin/cu view` lists sessions in a separate Chromium app window and shows the
+selected desktop, including headless sessions. It uses the Go standard library
+and an installed browser. `--no-open` prints a local URL instead. The viewer
+shows only a session picker, an Attach control, and the desktop.
+Attach forwards your mouse and keyboard to the selected session; your normal
+cursor stays separate from the pink agent marker. Frames refresh sequentially
+and pause when the window is hidden. The temporary Chromium profile is removed
+when the window closes. Without Chromium, it opens the default browser;
+stop the CLI with Ctrl-C when finished.
 
 Recordings add a visible agent cursor and click ring, including motion through
 paths and drags. For smooth real-time playback, use `--fps 12 --speed 1`.

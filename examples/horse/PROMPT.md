@@ -1,7 +1,8 @@
 # Horse in Calc
 
 Use the stateless `cu` MCP tools to draw a detailed horse in a real isolated
-LibreOffice Calc desktop.
+LibreOffice Calc desktop. Keep the desktop open for inspection with
+`cu view --id horse-calc`.
 
 On a sheet named `Pen`, use Calc's unfilled freeform drawing tool and held-button
 `path` actions. Draw a continuous silhouette, four articulated legs, hooves,

@@ -7,7 +7,7 @@ description: Control GUI applications in isolated Linux desktops with cu MCP, in
 
 Use the connected `cu` MCP tools. Every call names its desktop explicitly; MCP connections carry no selected desktop state. Pick a distinct session ID for independent agents. Never send simultaneous input batches to the same session.
 
-- `desktop_session` starts, lists, inspects, or stops desktops. Use `visible: true` when a nested live desktop is useful.
+- `desktop_session` starts, lists, inspects, or stops desktops. Use `visible: true` when a nested live desktop is useful; headless sessions can also be watched with `cu view`.
 - `desktop_launch` takes a program and separate arguments in `argv`.
 - `desktop_observe` returns window titles and an inline PNG at its original dimensions. Use its pixels as coordinates. `windows_only: true` checks app titles without an image.
 - `desktop_act` runs ordered `actions` and returns one inline image by default. Kinds: `move`, `click`, `drag`, `path`, `scroll`, `type`, `key`, `wait`. Pointer coordinates are `x`, `y`; drag endpoints are `to_x`, `to_y`. A `path` holds the left mouse button through `points: [{"x": 100, "y": 200}, ...]` in one connection; `duration_ms` controls pacing (0 to 5000). Use it for detailed freehand drawing instead of many tiny drags. Scroll uses `delta_x`, `delta_y` in pixels, positive right/down. Keys use names such as `Return` or `ctrl+l`.
@@ -21,4 +21,4 @@ Some GTK menus suppress a quick first selection after opening. Wait 550 ms after
 
 Keep sessions alive while the user is watching or intends to continue. Stop sessions you created only when finished with them. Desktop isolation selects a separate Wayland socket; launched applications still run as the local user and can access that user's files and network.
 
-If tools are unavailable, build this repository with `mise run build`, connect `bin/cu mcp` as a stdio MCP server, and restart the client to discover its tools. For stateless HTTP, run `bin/cu mcp --listen 127.0.0.1:7331` and connect to `http://127.0.0.1:7331/mcp`. See the repository README for installation.
+If tools are unavailable, build this repository with `mise run build`, connect `bin/cu mcp` as a stdio MCP server, and restart the client to discover its tools. For stateless HTTP, run `bin/cu mcp --listen 127.0.0.1:7331` and connect to `http://127.0.0.1:7331/mcp`. `bin/cu view` opens a separate session viewer window. See the repository README for installation.
