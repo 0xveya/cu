@@ -173,18 +173,13 @@ func RecordWorker(id, out string, fps, speed int) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	filter := "pad=ceil(iw/2)*2:ceil(ih/2)*2"
-	if !info.Visible {
-		filter = "scale=1920:1080:flags=bilinear"
-	}
-	if speed > 1 {
-		filter += ",drawtext=text='" + fmt.Sprint(speed) + "x':fontcolor=white:fontsize=38:box=1:boxcolor=black@0.75:boxborderw=10:x=w-tw-24:y=24"
-	}
+	filter := recordingFilter(info.Visible, speed)
 	// #nosec G204 -- out and fps come from the validated recording state for this managed session.
-	encoder := exec.CommandContext(context.WithoutCancel(ctx), "ffmpeg", "-hide_banner", "-loglevel", "error", "-n",
-		"-f", "image2pipe", "-framerate", fmt.Sprint(fps*speed), "-vcodec", "ppm", "-i", "pipe:0",
-		"-vf", filter, "-c:v", "libx264", "-preset", "ultrafast",
-		"-pix_fmt", "yuv420p", "-movflags", "+faststart", "-f", "mp4", out)
+	args := []string{"-hide_banner", "-loglevel", "error", "-n",
+		"-f", "image2pipe", "-framerate", fmt.Sprint(fps*speed), "-vcodec", "ppm", "-i", "pipe:0", "-vf", filter}
+	args = append(args, recordingEncoding()...)
+	args = append(args, "-f", "mp4", out)
+	encoder := exec.CommandContext(context.WithoutCancel(ctx), "ffmpeg", args...)
 	input, err := encoder.StdinPipe()
 	if err != nil {
 		return fmt.Errorf("open encoder input: %w", err)
