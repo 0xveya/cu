@@ -233,6 +233,7 @@ capture:
 
 func captureFrames(ctx context.Context, info session.Info, interval time.Duration, frames chan []byte, failures chan error) {
 	for ctx.Err() == nil {
+		started := time.Now()
 		frame := exec.CommandContext(ctx, "grim", "-t", "ppm", "-")
 		frame.Env = session.Environment(info.Runtime, info.Display)
 		pixels, err := frame.Output()
@@ -263,9 +264,14 @@ func captureFrames(ctx context.Context, info session.Info, interval time.Duratio
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(interval):
+		case <-time.After(captureDelay(interval, time.Since(started))):
 		}
 	}
+}
+
+// Account for screenshot and cursor costs instead of adding them to every period.
+func captureDelay(interval, elapsed time.Duration) time.Duration {
+	return max(0, interval-elapsed)
 }
 
 func recordingPath(info session.Info) string {

@@ -23,7 +23,7 @@ func TestRecordingFilterKeepsVisibleDimensionsAndSpeedBadge(t *testing.T) {
 	if strings.Contains(filter, "scale=") {
 		t.Fatal("visible desktop must not be scaled")
 	}
-	if !strings.Contains(filter, "drawtext=text='4x'") {
+	if !strings.Contains(filter, "drawtext=text='4x speed'") {
 		t.Fatal("accelerated video needs its speed badge")
 	}
 }
