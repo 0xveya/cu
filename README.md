@@ -1,15 +1,144 @@
-# cu
+# cu · a desktop for your agent
 
-`cu` is a Go CLI for an isolated Labwc desktop. Each session has its own
-Wayland socket under `$XDG_RUNTIME_DIR/cu/<id>/`. The user systemd manager keeps
-Labwc and launched apps alive between CLI calls.
+**Headless Linux computer use. Native screenshots. Shareable recordings.**
 
-It supports desktop lifecycle, command execution, app launch, inline MCP
-images, text input, named key presses, pointer paths, clicks, drags, and scrolling.
-It requires Linux with a running user systemd manager, `labwc`, `grim`, and
-`wtype` on `PATH`. Recording also requires `ffmpeg`.
+Give Hermes (or any MCP client) its own Labwc desktop on a NAS — without a
+monitor, a public remote-desktop port, or a permanent MCP daemon.
 
-Building requires the `wayland-client` development package and `pkg-config`.
+| Observe | Act | Share |
+| --- | --- | --- |
+| Original-size inline PNG + window titles | Type, click, scroll, drag and draw | H.264 MP4 with agent cursor + click rings |
+
+![Real headless desktop captured on the NAS](examples/nas/desktop.png)
+
+[Watch the real NAS recording](examples/nas/desktop.mp4) ·
+[Computer-use skill](skills/cu-computer-use/SKILL.md) ·
+[Drawing demo](examples/horse/PROMPT.md)
+
+## Install in one line
+
+After installing the dependencies below, clone the **private** repository with
+an authenticated SSH key, build, install, and register Hermes:
+
+```sh
+git clone --branch master git@github.com:0xveya/cu.git cu && cd cu && bash scripts/install.sh --hermes
+```
+
+Choose a different unused directory if `cu` already exists. No token is embedded
+in the command. Review the installer before running it. It installs to
+`~/.local/bin/cu`, checks prerequisites, and uses the official Hermes MCP CLI;
+it never edits Hermes YAML by hand. Answer **Y** to enable the five tools.
+Omit `--hermes` for CLI-only installation. Existing checkout:
+`bash scripts/install.sh --hermes`.
+
+### Dependencies (Debian 13 / compatible Linux NAS)
+
+```sh
+sudo apt-get update && sudo apt-get install -y labwc grim wtype ffmpeg foot fonts-dejavu-core libwayland-dev pkg-config build-essential git
+```
+
+Install **Go 1.26.5 or newer** separately, or use the repository's pinned `mise`
+tools. Go may download its required toolchain and modules during the build.
+Hermes must already be installed for `--hermes`. `foot` is the demo terminal;
+install browsers or other GUI apps separately. Building needs CGo, a C compiler,
+`wayland-client` development headers, and `pkg-config`.
+
+The installer does not run `sudo`, install OS packages, change login policy,
+or start a desktop. To deploy an already-built, trusted native binary:
+
+```sh
+bash scripts/install.sh --binary ./bin/cu --hermes
+```
+
+Add `~/.local/bin` to `PATH` if needed. `CU_INSTALL_DIR` overrides the install
+directory. Binaries must match the target architecture and libc; they link
+Wayland dynamically and are not portable static executables.
+
+### SSH / headless prerequisites
+
+Use a Linux NAS with **systemd as PID 1** and a running **user** manager.
+A plain Docker shell without user systemd is not enough. Log in through PAM
+(normal SSH), then check:
+
+```sh
+systemctl --user show-environment
+printf '%s\n' "$XDG_RUNTIME_DIR"
+```
+
+For unattended agents an administrator may enable lingering for the Hermes
+account. This deliberately keeps its user services alive after logout:
+
+```sh
+sudo loginctl enable-linger "$(id -un)"
+```
+
+For non-login services, set `XDG_RUNTIME_DIR=/run/user/UID` and
+`DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/UID/bus`, replacing UID with the
+actual account UID. The manager and socket must already exist; do not invent
+a runtime directory under `/tmp`. Run Hermes and `cu` as the **same account**.
+Prefer a dedicated unprivileged account for production. The NAS verification
+used the existing Hermes account, not a new privileged service.
+
+## Hermes: ready to use
+
+```sh
+hermes mcp add cu --command "$HOME/.local/bin/cu" --args mcp
+hermes mcp test cu
+hermes mcp list
+```
+
+The installer already registers MCP when `--hermes` is selected. Start a new
+Hermes session, or run `/reload-mcp` in a supported open session. The five tools
+are `desktop_session`, `desktop_launch`, `desktop_observe`, `desktop_act`, and
+`desktop_record`. Give every agent a distinct desktop ID:
+
+> Start a headless desktop named `research-1`, launch `foot`, type a greeting,
+> observe the desktop, then record a few interactions at 12 fps and normal
+> speed. Stop the recording before stopping the desktop.
+
+Optionally copy `skills/cu-computer-use` into the active Hermes profile's
+`skills/` directory for workflow guidance; do not overwrite an existing skill.
+See the [official Hermes MCP documentation](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp).
+
+## First headless desktop
+
+```sh
+cu start --id agent-1
+cu launch --id agent-1 -- foot
+cu windows --id agent-1
+cu screenshot --id agent-1 --out "$PWD/desktop.png"
+cu record start --id agent-1 --out "$PWD/desktop.mp4" --fps 12 --speed 1
+# Let your agent interact; recording continues across CLI/MCP calls.
+cu record stop --id agent-1
+cu stop --id agent-1
+```
+
+Wait for the app to appear in `windows` before sending input. Headless sessions
+need no host Wayland display. `--visible` nests inside an existing desktop.
+
+### Recording quality
+
+Headless videos fit into **1920×1080 without stretching**: Lanczos scaling,
+centered dark padding, H.264 **CRF 18 / fast**, browser-friendly `yuv420p`, and
+fast-start MP4. Visible sessions retain their dimensions, padded to even pixels.
+The existing agent cursor and click-ring overlays remain. Encoding uses more
+CPU than the old ultrafast preset; reduce `--fps` on a busy NAS. Screenshots and
+action coordinates always use native desktop pixels, not video pixels.
+
+Use `--fps 12 --speed 1` for smooth real-time demos. CLI defaults remain 4 fps /
+4× playback for compatibility; MCP defaults are 8 fps / real time. Accelerated
+videos retain their speed badge. Output files must not already exist. Stop the
+recorder before its desktop to finalize the MP4 cleanly.
+
+### Security boundary
+
+**Desktop isolation is not a sandbox.** Apps run as the Hermes account and can
+access its files and network. Use a dedicated account/container/VM with an
+appropriate security policy for untrusted apps; never expose GitHub tokens or
+SSH keys unnecessarily. Stdio is recommended; optional HTTP binds loopback,
+not the public NAS interface. Sessions live under `$XDG_RUNTIME_DIR/cu/<id>`
+and are cleaned by `cu stop`. User systemd keeps Labwc and launched apps alive
+between CLI calls.
 
 ## Try it
 

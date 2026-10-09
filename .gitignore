@@ -3,3 +3,7 @@
 *.out
 go.work
 .~lock.*#
+
+# Disposable build caches and Python test bytecode
+.build-cache/
+__pycache__/

@@ -15,6 +15,19 @@ func TestRecordingEncodingUsesHighQualityH264(t *testing.T) {
 	}
 }
 
+func TestRecordingFilterKeepsVisibleDimensionsAndSpeedBadge(t *testing.T) {
+	filter := recordingFilter(true, 4)
+	if !strings.HasPrefix(filter, "pad=ceil(iw/2)*2:ceil(ih/2)*2") {
+		t.Fatal(filter)
+	}
+	if strings.Contains(filter, "scale=") {
+		t.Fatal("visible desktop must not be scaled")
+	}
+	if !strings.Contains(filter, "drawtext=text='4x'") {
+		t.Fatal("accelerated video needs its speed badge")
+	}
+}
+
 func TestRecordingFilterPreservesHeadlessAspectRatio(t *testing.T) {
 	filter := recordingFilter(false, 1)
 	for _, want := range []string{"force_original_aspect_ratio=decrease", "pad=1920:1080:(ow-iw)/2:(oh-ih)/2", "flags=lanczos"} {
