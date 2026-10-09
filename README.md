@@ -83,11 +83,18 @@ mise run build
 
 ## Codex computer use
 
+Clone the private repository, install the pinned build tools, then register the
+MCP server and [computer-use skill](skills/cu-computer-use/SKILL.md):
+
 ```sh
+jj git clone git@github.com:0xveya/cu.git
+cd cu
+mise install
 mise run build
-codex mcp add cu -- /absolute/path/to/cu/bin/cu mcp
+codex mcp add cu -- "$PWD/bin/cu" mcp
 mkdir -p ~/.agents/skills
-ln -s /absolute/path/to/cu/skills/cu-computer-use ~/.agents/skills/cu-computer-use
+ln -s "$PWD/skills/cu-computer-use" ~/.agents/skills/cu-computer-use
+codex mcp get cu
 ```
 
 Restart Codex to discover the tools and skill. The default stdio server is
