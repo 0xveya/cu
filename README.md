@@ -21,7 +21,7 @@ After installing the dependencies below, clone the **private** repository with
 an authenticated SSH key, build, install, and register Hermes:
 
 ```sh
-git clone --branch master git@github.com:0xveya/cu.git cu && cd cu && bash scripts/install.sh --hermes
+git clone --branch main git@github.com:0xveya/cu.git cu && cd cu && bash scripts/install.sh --hermes
 ```
 
 Choose a different unused directory if `cu` already exists. No token is embedded
