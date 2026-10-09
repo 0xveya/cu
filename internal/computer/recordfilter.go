@@ -3,7 +3,7 @@ package computer
 import "fmt"
 
 func recordingEncoding() []string {
- return []string{"-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart"}
+	return []string{"-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart"}
 }
 
 // recordingFilter keeps screenshot coordinates undistorted in a 1080p video.

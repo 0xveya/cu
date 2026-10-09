@@ -176,7 +176,7 @@ func RecordWorker(id, out string, fps, speed int) error {
 	filter := recordingFilter(info.Visible, speed)
 	// #nosec G204 -- out and fps come from the validated recording state for this managed session.
 	args := []string{"-hide_banner", "-loglevel", "error", "-n",
-		"-f", "image2pipe", "-framerate", fmt.Sprint(fps*speed), "-vcodec", "ppm", "-i", "pipe:0", "-vf", filter}
+		"-f", "image2pipe", "-framerate", fmt.Sprint(fps * speed), "-vcodec", "ppm", "-i", "pipe:0", "-vf", filter}
 	args = append(args, recordingEncoding()...)
 	args = append(args, "-f", "mp4", out)
 	encoder := exec.CommandContext(context.WithoutCancel(ctx), "ffmpeg", args...)

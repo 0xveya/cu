@@ -6,9 +6,13 @@ import (
 )
 
 func TestRecordingEncodingUsesHighQualityH264(t *testing.T) {
- args := strings.Join(recordingEncoding(), " ")
- if !strings.Contains(args, "-preset fast -crf 18") { t.Fatalf("missing quality settings: %s", args) }
- if !strings.Contains(args, "-movflags +faststart") { t.Fatal("video must support progressive playback") }
+	args := strings.Join(recordingEncoding(), " ")
+	if !strings.Contains(args, "-preset fast -crf 18") {
+		t.Fatalf("missing quality settings: %s", args)
+	}
+	if !strings.Contains(args, "-movflags +faststart") {
+		t.Fatal("video must support progressive playback")
+	}
 }
 
 func TestRecordingFilterPreservesHeadlessAspectRatio(t *testing.T) {
